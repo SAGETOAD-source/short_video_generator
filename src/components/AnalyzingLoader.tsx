@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const steps = [
-  { emoji: '🔍', text: 'Fetching video metadata...', color: 'text-blue-400' },
-  { emoji: '🧠', text: 'AI scanning for viral moments...', color: 'text-purple-400' },
-  { emoji: '📈', text: 'Analyzing trending topics & hashtags...', color: 'text-green-400' },
-  { emoji: '✂️', text: 'Finding perfect cut points...', color: 'text-yellow-400' },
-  { emoji: '🎵', text: 'Matching trending background music...', color: 'text-pink-400' },
-  { emoji: '📝', text: 'Generating viral captions & hooks...', color: 'text-red-400' },
-  { emoji: '📐', text: 'Formatting to 9:16 aspect ratio...', color: 'text-cyan-400' },
-  { emoji: '🚀', text: 'Preparing your Shorts for export...', color: 'text-orange-400' },
+  { emoji: '🔍', text: 'Fetching YouTube metadata...', color: 'text-blue-400' },
+  { emoji: '📝', text: 'Downloading transcript & captions...', color: 'text-purple-400' },
+  { emoji: '🧠', text: 'Scoring hook moments in first 3 seconds...', color: 'text-green-400' },
+  { emoji: '✂️', text: 'Selecting best cut points for Shorts/Reels...', color: 'text-yellow-400' },
+  { emoji: '📈', text: 'Matching trending hashtags to clip content...', color: 'text-pink-400' },
+  { emoji: '📐', text: 'Preparing 9:16 vertical exports...', color: 'text-cyan-400' },
+  { emoji: '🚀', text: 'Finalizing downloadable shorts...', color: 'text-orange-400' },
 ];
 
 interface Props {

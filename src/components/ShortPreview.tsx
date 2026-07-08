@@ -11,12 +11,25 @@ interface Props {
 }
 
 export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<number | null>(null);
+  const hasVideo = Boolean(clip.renderedVideoUrl);
 
-  const handlePlayToggle = () => {
+  const handlePlayToggle = async () => {
+    if (hasVideo && videoRef.current) {
+      if (videoRef.current.paused) {
+        await videoRef.current.play();
+        setPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setPlaying(false);
+      }
+      return;
+    }
+
     setPlaying((prev) => {
       if (prev && intervalRef.current) {
         window.clearInterval(intervalRef.current);
@@ -27,7 +40,7 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
   };
 
   useEffect(() => {
-    if (!playing) return;
+    if (hasVideo || !playing) return;
 
     intervalRef.current = window.setInterval(() => {
       setProgress((current) => {
@@ -50,7 +63,7 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
         intervalRef.current = null;
       }
     };
-  }, [playing, clip.duration]);
+  }, [playing, clip.duration, hasVideo]);
 
   useEffect(() => {
     setPlaying(false);
@@ -59,7 +72,17 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
       window.clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-  }, [clip.id]);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, [clip.id, clip.renderedVideoUrl]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = muted;
+    }
+  }, [muted]);
 
   const captions = clip.caption.split(' ').reduce((acc: string[][], word, i) => {
     const groupIdx = Math.floor(i / 4);
@@ -68,45 +91,65 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
     return acc;
   }, []);
 
-  const currentCaptionGroup = Math.floor((progress / 100) * captions.length);
+  const currentCaptionGroup = hasVideo
+    ? Math.floor(((videoRef.current?.currentTime || 0) / Math.max(clip.duration, 1)) * captions.length)
+    : Math.floor((progress / 100) * captions.length);
 
   return (
     <div className="flex flex-col items-center">
       <div className="flex items-center gap-2 mb-3">
         <Smartphone className="w-4 h-4 text-gray-400" />
-        <span className="text-sm text-gray-400 font-medium">9:16 Preview</span>
+        <span className="text-sm text-gray-400 font-medium">
+          {hasVideo ? '9:16 Rendered Short' : '9:16 Preview'}
+        </span>
       </div>
 
-      {/* Phone frame */}
       <div
         className="relative bg-black rounded-[2rem] overflow-hidden shadow-2xl border-2 border-white/20"
         style={{ width: '160px', height: '284px' }}
       >
-        {/* Thumbnail */}
-        <img
-          src={clip.thumbnail}
-          alt={clip.title}
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.opacity = '0.3';
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30" />
+        {hasVideo ? (
+          <video
+            ref={videoRef}
+            src={clip.renderedVideoUrl}
+            className="absolute inset-0 w-full h-full object-cover"
+            playsInline
+            muted={muted}
+            onTimeUpdate={(event) => {
+              const video = event.currentTarget;
+              setProgress((video.currentTime / Math.max(video.duration || clip.duration, 1)) * 100);
+            }}
+            onEnded={() => {
+              setPlaying(false);
+              setProgress(0);
+            }}
+          />
+        ) : (
+          <>
+            <img
+              src={clip.thumbnail}
+              alt={clip.title}
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.opacity = '0.3';
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30" />
+          </>
+        )}
 
-        {/* Top overlay */}
-        <div className="absolute top-3 inset-x-3 flex items-center justify-between">
+        <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10">
           <div className="bg-black/60 rounded-full px-2 py-0.5 text-[9px] text-white font-bold">
-            9:16 Shorts
+            9:16
           </div>
           <div className="bg-red-500 rounded-full px-2 py-0.5 text-[9px] text-white font-bold">
             {formatTime(clip.duration)}
           </div>
         </div>
 
-        {/* Center play button */}
         <button
           onClick={handlePlayToggle}
-          className="absolute inset-0 flex items-center justify-center"
+          className="absolute inset-0 flex items-center justify-center z-10"
         >
           <motion.div
             whileTap={{ scale: 0.85 }}
@@ -122,15 +165,14 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
           </motion.div>
         </button>
 
-        {/* Caption overlay */}
         <AnimatePresence>
-          {playing && captions[currentCaptionGroup] && (
+          {(playing || hasVideo) && captions[currentCaptionGroup] && (
             <motion.div
               key={currentCaptionGroup}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="absolute bottom-14 inset-x-2 text-center"
+              className="absolute bottom-14 inset-x-2 text-center z-10"
             >
               <span className="bg-black/80 text-white text-[11px] font-black px-2 py-1 rounded-lg leading-tight inline-block uppercase tracking-wide" style={{ textShadow: '0 1px 3px black' }}>
                 {captions[currentCaptionGroup].join(' ')}
@@ -139,9 +181,8 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
           )}
         </AnimatePresence>
 
-        {/* Music indicator */}
         {musicName && (
-          <div className="absolute bottom-8 inset-x-2 flex items-center gap-1">
+          <div className="absolute bottom-8 inset-x-2 flex items-center gap-1 z-10">
             <div className="flex gap-0.5 items-end">
               {[2, 4, 3, 5, 2].map((h, i) => (
                 <motion.div
@@ -157,31 +198,26 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
           </div>
         )}
 
-        {/* Progress bar */}
-        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-white/20">
+        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-white/20 z-10">
           <div
             className="h-full bg-white transition-all duration-100"
             style={{ width: `${progress}%` }}
           />
         </div>
 
-        {/* Right side actions (TikTok style) */}
-        <div className="absolute right-2 bottom-16 flex flex-col items-center gap-3">
-          <div className="text-center">
-            <div className="text-xl">❤️</div>
-            <div className="text-[8px] text-white">Like</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xl">💬</div>
-            <div className="text-[8px] text-white">Comment</div>
-          </div>
+        <div className="absolute right-2 bottom-16 flex flex-col items-center gap-3 z-10">
           <button onClick={() => setMuted(!muted)} className="text-center">
             {muted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
           </button>
         </div>
       </div>
 
-      {/* Hook score */}
+      {!hasVideo && (
+        <p className="text-[11px] text-gray-500 mt-2 text-center max-w-[180px]">
+          Rendering 9:16 preview in background...
+        </p>
+      )}
+
       <div className="mt-3 flex items-center gap-2">
         <div className="text-xs text-gray-500">Hook Score:</div>
         <div className="flex-1 h-1.5 bg-white/10 rounded-full w-20 overflow-hidden">

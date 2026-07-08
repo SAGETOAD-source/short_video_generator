@@ -12,6 +12,9 @@ import ShortPreview from './components/ShortPreview';
 import ExportPanel from './components/ExportPanel';
 import { VideoAnalysis, VideoClip, Step } from './types';
 import { generateMockAnalysis, MUSIC_TRACKS } from './utils/mockData';
+import { analyzeVideo } from './utils/analysis';
+import { getApiBaseUrl, renderClip } from './utils/publishing';
+import toast from 'react-hot-toast';
 
 export default function App() {
   const [step, setStep] = useState<Step>('input');
@@ -31,8 +34,30 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (step === 'analyzing' && videoId) {
-      const timer = setTimeout(() => {
+    if (step !== 'analyzing' || !videoId) return;
+
+    let cancelled = false;
+
+    const runAnalysis = async () => {
+      try {
+        const data = await analyzeVideo(videoUrl, videoId);
+        if (cancelled) return;
+
+        setAnalysis(data);
+        const defaultTags = data.trends
+          .filter((trend) => trend.hot)
+          .slice(0, 5)
+          .map((trend) => trend.tag);
+        setSelectedTags(defaultTags.length > 0 ? defaultTags : data.trends.slice(0, 4).map((trend) => trend.tag));
+        setSelectedClipIds(data.clips.slice(0, 2).map((clip) => clip.id));
+        setPreviewClip(data.clips[0]);
+        setStep('results');
+        toast.success(`Found ${data.clips.length} hook-based shorts from real video analysis.`, {
+          style: { background: '#1a1a2e', color: 'white' },
+        });
+      } catch (error) {
+        if (cancelled) return;
+
         const data = generateMockAnalysis(videoId, videoUrl);
         setAnalysis(data);
         const defaultTags = data.trends
@@ -40,14 +65,61 @@ export default function App() {
           .slice(0, 5)
           .map((trend) => trend.tag);
         setSelectedTags(defaultTags.length > 0 ? defaultTags : data.trends.slice(0, 4).map((trend) => trend.tag));
-        // Auto-select top 2 clips
         setSelectedClipIds([data.clips[0].id, data.clips[1].id]);
         setPreviewClip(data.clips[0]);
         setStep('results');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+        toast.error(
+          error instanceof Error
+            ? `${error.message} Using fallback clips for now.`
+            : 'Real analysis failed. Using fallback clips.',
+          { duration: 6500, style: { background: '#1a1a2e', color: 'white' } },
+        );
+      }
+    };
+
+    runAnalysis();
+    return () => {
+      cancelled = true;
+    };
   }, [step, videoId, videoUrl]);
+
+  useEffect(() => {
+    if (!previewClip || previewClip.renderedVideoUrl || !videoUrl || !videoId) return;
+    if (!getApiBaseUrl()) return;
+
+    let cancelled = false;
+
+    const renderPreview = async () => {
+      try {
+        const result = await renderClip({ videoId, videoUrl, clip: previewClip });
+        if (cancelled) return;
+
+        setAnalysis((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            clips: current.clips.map((clip) =>
+              clip.id === previewClip.id
+                ? { ...clip, renderedVideoUrl: result.renderedVideoUrl, status: 'done' }
+                : clip,
+            ),
+          };
+        });
+        setPreviewClip((current) =>
+          current?.id === previewClip.id
+            ? { ...current, renderedVideoUrl: result.renderedVideoUrl, status: 'done' }
+            : current,
+        );
+      } catch {
+        // Preview render is best-effort
+      }
+    };
+
+    renderPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewClip?.id, videoId, videoUrl, previewClip?.renderedVideoUrl]);
 
   const toggleClipSelect = (id: string) => {
     setSelectedClipIds(prev =>

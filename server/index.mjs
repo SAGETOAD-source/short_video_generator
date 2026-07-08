@@ -3,6 +3,8 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureRendersDir, renderClipToMp4 } from './render.mjs';
+import { analyzeYoutubeVideo } from './analyze.mjs';
+import { commandExists } from './ytdlp.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8000);
@@ -14,12 +16,31 @@ app.use(express.json({ limit: '2mb' }));
 
 await ensureRendersDir();
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  const hasYtDlp = await commandExists('yt-dlp');
   res.json({
     ok: true,
     service: 'shortscraft-renderer',
     port: PORT,
+    ytdlp: hasYtDlp,
   });
+});
+
+app.post('/api/analyze', async (req, res) => {
+  try {
+    const { videoUrl, videoId } = req.body || {};
+    if (!videoUrl || !videoId) {
+      return res.status(400).json({ error: 'videoUrl and videoId are required.' });
+    }
+
+    const analysis = await analyzeYoutubeVideo(videoUrl, videoId);
+    return res.json(analysis);
+  } catch (error) {
+    console.error('[analyze] failed:', error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Analysis failed',
+    });
+  }
 });
 
 app.post('/api/render', async (req, res) => {
