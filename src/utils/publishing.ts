@@ -29,6 +29,9 @@ export interface RenderResponse {
 }
 
 export function getApiBaseUrl() {
+  if (import.meta.env.DEV) {
+    return ''; // Use Vite proxy in development
+  }
   return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 }
 
@@ -67,6 +70,8 @@ export async function renderClip(payload: {
   videoId: string;
   videoUrl: string;
   clip: VideoClip;
+  music?: MusicTrack | null;
+  musicVolume?: number;
 }): Promise<RenderResponse> {
   const apiBaseUrl = getApiBaseUrl();
 
@@ -203,10 +208,16 @@ export async function downloadRenderedVideo(
   }
 
   try {
-    const response = await fetch(renderedVideoUrl, { mode: 'cors' });
-    if (!response.ok) throw new Error('Render fetch failed.');
-    const blob = await response.blob();
-    downloadBlob(blob, `${clip.id}.mp4`);
+    // Instead of fetching the blob into memory (which can crash on large videos)
+    // or relying on cross-origin fetch, we use the proxy (if in dev) and a native <a> tag download
+    const anchor = document.createElement('a');
+    anchor.href = renderedVideoUrl;
+    // ensure the browser tries to download it instead of navigating
+    anchor.download = `${clip.id}.mp4`; 
+    anchor.target = '_blank';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
     return 'rendered';
   } catch (_error) {
     try {

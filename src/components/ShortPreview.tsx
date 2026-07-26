@@ -105,9 +105,13 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
       </div>
 
       <div
-        className="relative bg-black rounded-[2rem] overflow-hidden shadow-2xl border-2 border-white/20"
-        style={{ width: '160px', height: '284px' }}
+        className="relative bg-black rounded-[3rem] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border-[6px] border-[#1a1a1a] ring-1 ring-white/10"
+        style={{ width: '280px', height: '580px' }}
       >
+        {/* Notch */}
+        <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20">
+          <div className="w-24 h-5 bg-[#1a1a1a] rounded-b-xl" />
+        </div>
         {hasVideo ? (
           <video
             ref={videoRef}
@@ -138,11 +142,11 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
           </>
         )}
 
-        <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10">
-          <div className="bg-black/60 rounded-full px-2 py-0.5 text-[9px] text-white font-bold">
-            9:16
+        <div className="absolute top-8 inset-x-5 flex items-center justify-between z-10">
+          <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-full px-3 py-1 text-[10px] text-white font-medium tracking-wide">
+            9:16 FORMAT
           </div>
-          <div className="bg-red-500 rounded-full px-2 py-0.5 text-[9px] text-white font-bold">
+          <div className="bg-violet-500/80 backdrop-blur-md border border-violet-400/30 rounded-full px-3 py-1 text-[10px] text-white font-bold shadow-[0_0_10px_rgba(139,92,246,0.3)]">
             {formatTime(clip.duration)}
           </div>
         </div>
@@ -169,12 +173,13 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
           {(playing || hasVideo) && captions[currentCaptionGroup] && (
             <motion.div
               key={currentCaptionGroup}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="absolute bottom-14 inset-x-2 text-center z-10"
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="absolute bottom-24 inset-x-4 text-center z-10"
             >
-              <span className="bg-black/80 text-white text-[11px] font-black px-2 py-1 rounded-lg leading-tight inline-block uppercase tracking-wide" style={{ textShadow: '0 1px 3px black' }}>
+              <span className="bg-white/95 text-black text-[15px] font-black px-4 py-2 rounded-xl leading-tight inline-block uppercase tracking-wider shadow-xl border border-white/20">
                 {captions[currentCaptionGroup].join(' ')}
               </span>
             </motion.div>
@@ -182,19 +187,18 @@ export default function ShortPreview({ clip, musicName, musicVolume }: Props) {
         </AnimatePresence>
 
         {musicName && (
-          <div className="absolute bottom-8 inset-x-2 flex items-center gap-1 z-10">
-            <div className="flex gap-0.5 items-end">
-              {[2, 4, 3, 5, 2].map((h, i) => (
+          <div className="absolute bottom-14 inset-x-4 flex items-center gap-2 z-10 bg-black/40 backdrop-blur-md border border-white/10 rounded-full px-3 py-1.5 w-max">
+            <div className="flex gap-0.5 items-end h-3">
+              {[3, 6, 4, 8, 3].map((h, i) => (
                 <motion.div
                   key={i}
-                  className="w-0.5 bg-white rounded-full"
-                  animate={playing ? { height: [`${h}px`, `${h + 3}px`, `${h}px`] } : { height: `${h}px` }}
+                  className="w-[3px] bg-white rounded-full"
+                  animate={playing ? { height: [`${h}px`, `${h + 4}px`, `${h}px`] } : { height: `${h}px` }}
                   transition={{ duration: 0.4, delay: i * 0.08, repeat: Infinity }}
                 />
               ))}
             </div>
-            <span className="text-white text-[8px] truncate opacity-80">{musicName}</span>
-            <span className="text-white/60 text-[8px]">{musicVolume}%</span>
+            <span className="text-white text-[10px] font-medium truncate max-w-[120px]">{musicName}</span>
           </div>
         )}
 

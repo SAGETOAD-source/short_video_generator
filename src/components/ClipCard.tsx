@@ -43,11 +43,11 @@ export default function ClipCard({ clip, index, onSelect, isSelected, onCaptionE
       initial={{ opacity: 0, x: -30 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.1 }}
-      className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
+      className={`glass-card rounded-2xl overflow-hidden ${
         isSelected
-          ? 'border-red-400/60 shadow-lg shadow-red-500/10'
-          : 'border-white/10 hover:border-white/20'
-      } bg-white/5 backdrop-blur-sm`}
+          ? 'border-violet-500/50 shadow-[0_0_30px_rgba(139,92,246,0.15)] bg-white/[0.04]'
+          : ''
+      }`}
     >
       {/* Header */}
       <div className="flex gap-4 p-4">
@@ -137,10 +137,10 @@ export default function ClipCard({ clip, index, onSelect, isSelected, onCaptionE
         <div className="flex-shrink-0">
           <button
             onClick={() => onSelect(clip.id)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${
               isSelected
-                ? 'bg-red-500 text-white shadow-red-500/30 shadow-md'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                ? 'bg-violet-500 text-white shadow-[0_0_20px_rgba(139,92,246,0.4)]'
+                : 'bg-white/[0.05] text-white/70 hover:bg-white/[0.1] hover:text-white'
             }`}
           >
             {isSelected ? '✓ Selected' : 'Select'}

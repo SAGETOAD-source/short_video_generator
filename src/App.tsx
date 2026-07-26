@@ -91,7 +91,14 @@ export default function App() {
 
     const renderPreview = async () => {
       try {
-        const result = await renderClip({ videoId, videoUrl, clip: previewClip });
+        const previewMusic = MUSIC_TRACKS.find((track) => track.id === selectedMusicId) || null;
+        const result = await renderClip({
+          videoId,
+          videoUrl,
+          clip: previewClip,
+          music: previewMusic,
+          musicVolume,
+        });
         if (cancelled) return;
 
         setAnalysis((current) => {
@@ -119,7 +126,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [previewClip?.id, videoId, videoUrl, previewClip?.renderedVideoUrl]);
+  }, [previewClip?.id, videoId, videoUrl, previewClip?.renderedVideoUrl, selectedMusicId, musicVolume]);
 
   const toggleClipSelect = (id: string) => {
     setSelectedClipIds(prev =>
@@ -177,61 +184,67 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] relative overflow-x-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="min-h-screen bg-[#050505] text-white font-sans relative overflow-x-hidden selection:bg-purple-500/30">
       <Toaster position="top-right" />
 
-      {/* Animated background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-500/8 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 right-1/4 w-80 h-80 bg-purple-500/8 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 left-1/3 w-72 h-72 bg-pink-500/6 rounded-full blur-3xl" />
-        {/* Grid pattern */}
+      {/* Premium ambient background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-violet-600/10 blur-[120px]" />
+        <div className="absolute top-[20%] -right-[10%] w-[40%] h-[40%] rounded-full bg-cyan-500/10 blur-[120px]" />
+        <div className="absolute -bottom-[20%] left-[20%] w-[60%] h-[60%] rounded-full bg-fuchsia-600/10 blur-[120px]" />
+        
+        {/* Subtle noise texture or grid */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.015]"
           style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '50px 50px',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
           }}
         />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 py-10">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {/* Header nav */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between mb-14"
         >
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={handleReset}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center shadow-lg shadow-red-500/30">
-              <Scissors className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={handleReset}>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 p-[1px] group-hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-shadow">
+              <div className="w-full h-full rounded-2xl bg-[#050505] flex items-center justify-center">
+                <Scissors className="w-5 h-5 text-transparent bg-clip-text bg-gradient-to-br from-violet-400 to-fuchsia-400" />
+              </div>
             </div>
             <div>
-              <div className="text-white font-black text-lg leading-none" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              <div className="font-display font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
                 ShortsCraft
               </div>
-              <div className="text-gray-600 text-[10px]">AI Shorts Generator</div>
+              <div className="text-white/40 text-[10px] font-medium tracking-widest uppercase mt-0.5">Studio Edition</div>
             </div>
           </div>
 
           {step !== 'input' && (
             <div className="flex items-center gap-3">
               {/* Step indicator */}
-              <div className="hidden md:flex items-center gap-1 text-xs text-gray-500">
-                {['input', 'analyzing', 'results'].map((s, i) => (
-                  <span key={s} className="flex items-center gap-1">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                      step === s ? 'bg-red-500 text-white' :
-                      ['analyzing', 'results'].indexOf(step) > ['input', 'analyzing', 'results'].indexOf(s) ? 'bg-green-500/20 text-green-400' :
-                      'bg-white/10 text-gray-600'
-                    }`}>{i + 1}</span>
-                    {i < 2 && <ChevronRight className="w-3 h-3" />}
-                  </span>
-                ))}
+              <div className="hidden md:flex items-center gap-1.5 text-xs font-medium text-white/40 bg-white/[0.03] p-1 rounded-full border border-white/[0.05]">
+                {['input', 'analyzing', 'results'].map((s, i) => {
+                  const isActive = step === s;
+                  const isPast = ['analyzing', 'results'].indexOf(step) > ['input', 'analyzing', 'results'].indexOf(s);
+                  return (
+                    <span key={s} className="flex items-center">
+                      <span className={`px-3 py-1 rounded-full transition-colors ${
+                        isActive ? 'bg-white/10 text-white' :
+                        isPast ? 'text-white/70' : ''
+                      }`}>
+                        {i + 1}. {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </span>
+                    </span>
+                  );
+                })}
               </div>
               <button
                 onClick={handleReset}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-gray-400 hover:text-white rounded-lg text-sm transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.08] text-white/70 hover:text-white rounded-xl text-sm font-medium transition-all"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 New Video
@@ -319,35 +332,40 @@ export default function App() {
               <motion.div
                 initial={{ opacity: 0, y: -15 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl mb-8"
+                className="glass-panel rounded-3xl p-5 mb-8 flex flex-col md:flex-row items-start md:items-center gap-5"
               >
-                <img
-                  src={analysis.thumbnail}
-                  alt="Video"
-                  className="w-20 h-14 object-cover rounded-xl flex-shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-                  }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="w-4 h-4 text-yellow-400" />
-                    <span className="text-yellow-400 text-xs font-semibold">Analysis Complete!</span>
+                <div className="relative">
+                  <img
+                    src={analysis.thumbnail}
+                    alt="Video"
+                    className="w-20 h-14 object-cover rounded-xl flex-shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                    }}
+                  />
+                  <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-2xl" />
+                </div>
+                <div className="flex-1 min-w-0 w-full">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                      <span className="text-yellow-400 text-[11px] font-bold uppercase tracking-wider">Analysis Complete</span>
+                    </div>
                   </div>
-                  <p className="text-white font-semibold text-sm truncate">YouTube Video · ID: {videoId}</p>
-                  <p className="text-gray-500 text-xs mt-0.5">
-                    Found <strong className="text-white">{analysis.clips.length} viral clips</strong> ·
-                    {' '}<strong className="text-white">{selectedClipIds.length} selected</strong>
+                  <p className="text-white/90 font-display font-semibold text-lg truncate">YouTube Video · ID: {videoId}</p>
+                  <p className="text-white/50 text-sm mt-1">
+                    Found <strong className="text-white/90 font-semibold">{analysis.clips.length} viral clips</strong> ·
+                    {' '}<strong className="text-white/90 font-semibold">{selectedClipIds.length} selected</strong>
                   </p>
                 </div>
-                <div className="hidden sm:flex items-center gap-2">
-                  <div className="text-center px-3 py-2 bg-white/5 rounded-xl">
-                    <div className="text-white font-bold text-lg">{analysis.clips.length}</div>
-                    <div className="text-gray-500 text-xs">Clips Found</div>
+                <div className="hidden md:flex items-center gap-3">
+                  <div className="text-center px-4 py-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl min-w-[100px]">
+                    <div className="text-white font-display font-bold text-2xl">{analysis.clips.length}</div>
+                    <div className="text-white/40 text-xs font-medium uppercase tracking-wider mt-1">Clips</div>
                   </div>
-                  <div className="text-center px-3 py-2 bg-white/5 rounded-xl">
-                    <div className="text-white font-bold text-lg">{analysis.trends.filter(t => t.hot).length}</div>
-                    <div className="text-gray-500 text-xs">Hot Trends</div>
+                  <div className="text-center px-4 py-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl min-w-[100px]">
+                    <div className="text-white font-display font-bold text-2xl">{analysis.trends.filter(t => t.hot).length}</div>
+                    <div className="text-white/40 text-xs font-medium uppercase tracking-wider mt-1">Trends</div>
                   </div>
                 </div>
               </motion.div>
@@ -356,12 +374,14 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Left: Clips */}
                 <div className="lg:col-span-2 space-y-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-white font-bold text-xl flex items-center gap-2">
-                      <Scissors className="w-5 h-5 text-red-400" />
-                      AI-Detected Viral Clips
+                  <div className="flex items-center justify-between mb-4 px-1">
+                    <h2 className="text-white font-display font-bold text-2xl flex items-center gap-2.5">
+                      <div className="p-1.5 bg-violet-500/10 rounded-lg">
+                        <Scissors className="w-5 h-5 text-violet-400" />
+                      </div>
+                      Viral Clips
                     </h2>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-sm font-medium text-white/40 bg-white/[0.03] px-3 py-1 rounded-full border border-white/[0.05]">
                       {selectedClipIds.length}/{analysis.clips.length} selected
                     </span>
                   </div>
@@ -437,14 +457,14 @@ export default function App() {
                         <button
                           key={clip.id}
                           onClick={() => setPreviewClip(clip)}
-                          className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-all duration-200 ${
+                          className={`w-full text-left px-4 py-3 rounded-2xl text-sm transition-all duration-300 ${
                             previewClip?.id === clip.id
-                              ? 'bg-red-500/20 border border-red-500/40 text-red-300'
-                              : 'bg-white/5 border border-white/5 text-gray-400 hover:border-white/20'
+                              ? 'bg-violet-500/10 border border-violet-500/30 text-violet-200 shadow-[inset_0_0_20px_rgba(139,92,246,0.1)]'
+                              : 'bg-white/[0.02] border border-white/[0.05] text-white/60 hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-white/90'
                           }`}
                         >
-                          <span className="font-medium truncate block">{clip.title}</span>
-                          <span className="text-gray-600">{clip.duration}s · Hook {clip.hookScore}%</span>
+                          <span className="font-medium truncate block font-display">{clip.title}</span>
+                          <span className="text-white/40 text-xs mt-1 block">{clip.duration}s · Hook Score <strong className="text-white/70">{clip.hookScore}%</strong></span>
                         </button>
                       ))}
                     </div>

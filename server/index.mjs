@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureRendersDir, renderClipToMp4 } from './render.mjs';
 import { analyzeYoutubeVideo } from './analyze.mjs';
+import fs from 'node:fs';
+import { google } from 'googleapis';
 import { commandExists } from './ytdlp.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,13 +47,13 @@ app.post('/api/analyze', async (req, res) => {
 
 app.post('/api/render', async (req, res) => {
   try {
-    const { videoId, videoUrl, clip } = req.body || {};
+    const { videoId, videoUrl, clip, music, musicVolume } = req.body || {};
 
     if (!videoId || !clip?.id) {
       return res.status(400).json({ error: 'videoId and clip.id are required.' });
     }
 
-    const result = await renderClipToMp4({ videoId, videoUrl, clip });
+    const result = await renderClipToMp4({ videoId, videoUrl, clip, music, musicVolume });
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     return res.json({
@@ -97,6 +99,63 @@ app.post('/api/publish/:platform', async (req, res) => {
   const studioUrl = platform === 'youtube'
     ? 'https://studio.youtube.com/channel/upload'
     : 'https://www.instagram.com/';
+
+  if (platform === 'youtube' && process.env.YOUTUBE_CLIENT_ID) {
+    try {
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.YOUTUBE_CLIENT_ID,
+        process.env.YOUTUBE_CLIENT_SECRET,
+        'http://localhost:8001/oauth2callback'
+      );
+      
+      oauth2Client.setCredentials({
+        refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
+      });
+
+      const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      
+      let filePath = '';
+      if (renderedVideoUrl && renderedVideoUrl.includes('/api/renders/')) {
+        const parts = renderedVideoUrl.split('/');
+        const name = parts[parts.length - 1];
+        filePath = path.join(__dirname, 'renders', name);
+      }
+
+      if (!filePath || !fs.existsSync(filePath)) {
+        return res.status(400).json({ error: 'Rendered video file not found locally.' });
+      }
+
+      const response = await youtube.videos.insert({
+        part: ['snippet', 'status'],
+        requestBody: {
+          snippet: {
+            title: title || clip.title,
+            description: req.body.description || clip.caption,
+            tags: req.body.tags || [],
+          },
+          status: {
+            privacyStatus: 'private', // Upload as private initially
+            selfDeclaredMadeForKids: false,
+          },
+        },
+        media: {
+          body: fs.createReadStream(filePath),
+        },
+      });
+
+      return res.json({
+        message: `Successfully uploaded to YouTube as private! Video ID: ${response.data.id}`,
+        platform,
+        clipId: clip.id,
+        renderedVideoUrl: renderedVideoUrl || null,
+        studioUrl: `https://studio.youtube.com/video/${response.data.id}/edit`,
+        postUrl: `https://youtu.be/${response.data.id}`,
+      });
+    } catch (err) {
+      console.error('[youtube upload error]:', err);
+      return res.status(500).json({ error: 'YouTube upload failed: ' + (err.message || 'Unknown error') });
+    }
+  }
 
   return res.json({
     message: `Mock publish queued for "${title || clip.title}" on ${label}. Connect real OAuth credentials to enable live uploads.`,

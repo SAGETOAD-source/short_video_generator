@@ -12,9 +12,10 @@ const RENDERS_DIR = path.join(__dirname, 'renders');
 const FFMPEG = ffmpegInstaller.path;
 
 const VERTICAL_FILTER = [
-  'scale=1080:1920:force_original_aspect_ratio=increase',
-  'crop=1080:1920',
-].join(',');
+  '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,boxblur=20:20[bg]',
+  '[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg]',
+  '[bg][fg]overlay=(W-w)/2:(H-h)/2[vout]'
+].join(';');
 
 export async function ensureRendersDir() {
   await fs.mkdir(RENDERS_DIR, { recursive: true });
@@ -37,6 +38,7 @@ function escapeDrawtext(text) {
   return text
     .replace(/\\/g, '\\\\')
     .replace(/:/g, '\\:')
+    .replace(/,/g, '\\,')
     .replace(/'/g, "\\'")
     .replace(/%/g, '\\%');
 }
@@ -72,6 +74,49 @@ function drawTextFilter(text, { size, y, weight = 'regular' }) {
   const font = fontArg(weight);
   const fontPart = font ? `${font}:` : '';
   return `drawtext=${fontPart}text='${escapeDrawtext(text)}':fontsize=${size}:fontcolor=white:x=(w-text_w)/2:y=${y}:box=1:boxcolor=black@0.55:boxborderw=14`;
+}
+
+function clipAudioMix({ musicVolume = 18 }) {
+  const clampedMusic = Math.max(0, Math.min(60, Number(musicVolume)));
+  const sourceVolume = Math.max(0.45, 1 - clampedMusic / 110);
+  const bedVolume = Math.max(0.02, clampedMusic / 120);
+  return { sourceVolume, bedVolume };
+}
+
+function musicFrequencyFromTrack(music) {
+  if (!music) return 220;
+  const bpmPart = music.bpm ? Math.max(60, Math.min(180, music.bpm)) : 120;
+  const genreSeed = (music.genre || music.name || 'music')
+    .split('')
+    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const base = 120 + (genreSeed % 180);
+  return Math.round((base + bpmPart) / 2);
+}
+
+function subtitleTimeline(caption, duration) {
+  const words = caption.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const chunkSize = words.length > 16 ? 3 : 2;
+  const chunks = [];
+  for (let i = 0; i < words.length; i += chunkSize) {
+    chunks.push(words.slice(i, i + chunkSize).join(' '));
+  }
+  const effectiveDuration = Math.max(1.5, duration);
+  const step = effectiveDuration / chunks.length;
+  return chunks.map((chunk, index) => {
+    const start = Number((index * step).toFixed(2));
+    const end = Number(Math.min(effectiveDuration, (index + 1) * step + 0.12).toFixed(2));
+    return { chunk, start, end };
+  });
+}
+
+function subtitleFilters(caption, duration) {
+  const timeline = subtitleTimeline(caption, duration);
+  return timeline.map(({ chunk, start, end }) => {
+    const font = fontArg('bold');
+    const fontPart = font ? `${font}:` : '';
+    return `drawtext=${fontPart}text='${escapeDrawtext(chunk)}':fontsize=42:fontcolor=white:x=(w-text_w)/2:y=1620:box=1:boxcolor=black@0.62:boxborderw=16:enable='between(t,${start},${end})'`;
+  });
 }
 
 async function downloadThumbnail(thumbnailUrl, destPath) {
@@ -121,34 +166,51 @@ function captionFilters(caption) {
   }));
 }
 
-async function renderFromThumbnail({ clip, outputPath, workDir }) {
+async function renderFromThumbnail({ clip, outputPath, workDir, music, musicVolume }) {
   const thumbPath = path.join(workDir, `${clip.id}-thumb.jpg`);
   await downloadThumbnail(clip.thumbnail, thumbPath);
 
   const titleLines = wrapText(clip.title, 36);
   const duration = Math.min(Math.max(clip.duration, 3), 180);
+  const { bedVolume } = clipAudioMix({ musicVolume });
+  const musicFrequency = musicFrequencyFromTrack(music);
 
-  const filters = [
+  const videoFilters = [
     VERTICAL_FILTER,
-    'format=yuv420p',
+    '[vout]format=yuv420p[vout2]',
     ...titleLines.map((line, index) => drawTextFilter(line, { size: 52, y: 120 + index * 58, weight: 'bold' })),
-    ...captionFilters(clip.caption),
+    ...subtitleFilters(clip.caption, duration),
   ];
+
+  // We need to chain the drawtext filters after [vout2]
+  let chainedDrawtext = videoFilters.slice(2).length > 0 
+    ? `[vout2]${videoFilters.slice(2).join(',')}[vout3]`
+    : `[vout2]copy[vout3]`;
 
   await runFfmpeg([
     '-y',
     '-loop', '1',
     '-i', thumbPath,
+    '-f', 'lavfi',
     '-t', String(duration),
-    '-vf', filters.join(','),
+    '-i', `sine=frequency=${musicFrequency}:sample_rate=44100`,
+    '-t', String(duration),
+    '-filter_complex',
+    `${videoFilters[0]};${videoFilters[1]};${chainedDrawtext};[1:a]volume=${bedVolume},afade=t=in:st=0:d=0.4,afade=t=out:st=${Math.max(0.5, duration - 0.7)}:d=0.6[aout]`,
+    '-map', '[vout3]',
+    '-map', '[aout]',
     '-c:v', 'libx264',
+    '-preset', 'slow',
+    '-crf', '18',
+    '-c:a', 'aac',
+    '-b:a', '192k',
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
     outputPath,
   ]);
 }
 
-async function renderFromYoutube({ videoUrl, clip, outputPath, workDir }) {
+async function renderFromYoutube({ videoUrl, clip, outputPath, workDir, music, musicVolume }) {
   const hasYtDlp = await commandExists('yt-dlp');
   if (!hasYtDlp) {
     throw new Error('yt-dlp not installed');
@@ -172,27 +234,50 @@ async function renderFromYoutube({ videoUrl, clip, outputPath, workDir }) {
   }
 
   const sourcePath = path.join(workDir, downloaded);
+  const duration = Math.min(Math.max(clip.duration, 3), 180);
+  const { sourceVolume, bedVolume } = clipAudioMix({ musicVolume });
+  const musicFrequency = musicFrequencyFromTrack(music);
   const filters = [
     VERTICAL_FILTER,
-    ...captionFilters(clip.caption),
-    'format=yuv420p',
+    '[vout]format=yuv420p[vout2]',
+    ...subtitleFilters(clip.caption, duration),
   ];
+
+  let chainedDrawtext = filters.slice(2).length > 0 
+    ? `[vout2]${filters.slice(2).join(',')}[vout3]`
+    : `[vout2]copy[vout3]`;
 
   await runFfmpeg([
     '-y',
     '-i', sourcePath,
-    '-vf', filters.join(','),
+    '-f', 'lavfi',
+    '-t', String(duration),
+    '-i', `sine=frequency=${musicFrequency}:sample_rate=44100`,
+    '-filter_complex',
+    `${filters[0]};${filters[1]};${chainedDrawtext};[0:a]volume=${sourceVolume}[srca];[1:a]volume=${bedVolume},afade=t=in:st=0:d=0.4,afade=t=out:st=${Math.max(0.5, duration - 0.7)}:d=0.6[beda];[srca][beda]amix=inputs=2:duration=first:dropout_transition=2[aout]`,
+    '-map', '[vout3]',
+    '-map', '[aout]',
     '-c:v', 'libx264',
+    '-preset', 'slow',
+    '-crf', '18',
     '-c:a', 'aac',
+    '-b:a', '192k',
     '-movflags', '+faststart',
     outputPath,
   ]);
 }
 
-export async function renderClipToMp4({ videoId, videoUrl, clip }) {
+function renderVariantSuffix({ music, musicVolume }) {
+  const musicId = music?.id || 'nomusic';
+  const volume = Number.isFinite(Number(musicVolume)) ? Number(musicVolume) : 18;
+  return `${sanitizeFilename(musicId)}-v${Math.max(0, Math.min(100, Math.round(volume)))}`;
+}
+
+export async function renderClipToMp4({ videoId, videoUrl, clip, music = null, musicVolume = 18 }) {
   await ensureRendersDir();
 
-  const filename = `${sanitizeFilename(videoId)}-${sanitizeFilename(clip.id)}.mp4`;
+  const variant = renderVariantSuffix({ music, musicVolume });
+  const filename = `${sanitizeFilename(videoId)}-${sanitizeFilename(clip.id)}-${variant}.mp4`;
   const outputPath = path.join(RENDERS_DIR, filename);
 
   if (await fileExists(outputPath)) {
@@ -208,7 +293,7 @@ export async function renderClipToMp4({ videoId, videoUrl, clip }) {
     if (videoUrl) {
       try {
         await runWithTimeout(
-          renderFromYoutube({ videoUrl, clip, outputPath, workDir }),
+          renderFromYoutube({ videoUrl, clip, outputPath, workDir, music, musicVolume }),
           renderTimeout,
           'YouTube segment render',
         );
@@ -218,7 +303,7 @@ export async function renderClipToMp4({ videoId, videoUrl, clip }) {
       }
     }
 
-    await renderFromThumbnail({ clip, outputPath, workDir });
+    await renderFromThumbnail({ clip, outputPath, workDir, music, musicVolume });
     return { filename, outputPath, mode: 'thumbnail' };
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);

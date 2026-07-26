@@ -65,7 +65,13 @@ export default function ExportPanel({
       throw new Error('Renderer API is not configured. Add VITE_API_BASE_URL to .env and run npm run server.');
     }
 
-    const result = await renderClip({ videoId, videoUrl, clip });
+    const result = await renderClip({
+      videoId,
+      videoUrl,
+      clip,
+      music: selectedMusic,
+      musicVolume,
+    });
     onClipRendered(clip.id, result.renderedVideoUrl);
     return { ...clip, renderedVideoUrl: result.renderedVideoUrl };
   };
@@ -161,14 +167,15 @@ export default function ExportPanel({
 
   if (selectedClips.length === 0) {
     return (
+    return (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center"
+        className="glass-panel rounded-3xl p-10 text-center"
       >
-        <div className="text-4xl mb-3">✂️</div>
-        <p className="text-gray-400 font-medium">Select clips to enable export</p>
-        <p className="text-gray-600 text-sm mt-1">Choose at least one clip from the list above</p>
+        <div className="text-5xl mb-4 bg-white/5 w-20 h-20 mx-auto rounded-2xl flex items-center justify-center border border-white/10 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]">✂️</div>
+        <p className="text-white/80 font-display text-lg font-medium">Select clips to enable export</p>
+        <p className="text-white/40 text-sm mt-2">Choose at least one clip from the list above</p>
       </motion.div>
     );
   }
@@ -180,10 +187,12 @@ export default function ExportPanel({
       className="space-y-4"
     >
       {/* Video Title */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Tag className="w-4 h-4 text-yellow-400" />
-          <span className="text-white font-semibold text-sm">Video Title & Description</span>
+      <div className="glass-panel rounded-3xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-1.5 bg-yellow-500/10 rounded-lg">
+            <Tag className="w-4 h-4 text-yellow-400" />
+          </div>
+          <span className="text-white/90 font-display font-semibold">Video Title & Description</span>
         </div>
         {editingTitle ? (
           <div className="space-y-2">
@@ -204,21 +213,21 @@ export default function ExportPanel({
         ) : (
           <div
             onClick={() => setEditingTitle(true)}
-            className="group cursor-pointer flex items-center gap-2 p-3 bg-white/5 border border-white/10 rounded-xl hover:border-yellow-400/30 transition-colors"
+            className="group cursor-pointer flex items-center gap-3 p-4 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:bg-white/[0.04] hover:border-yellow-400/30 transition-colors"
           >
-            <span className={`text-sm flex-1 ${videoTitle ? 'text-white' : 'text-gray-500'}`}>
+            <span className={`text-sm flex-1 font-medium ${videoTitle ? 'text-white/90' : 'text-white/40'}`}>
               {videoTitle || 'Click to add a viral video title...'}
             </span>
-            <Edit3 className="w-3.5 h-3.5 text-gray-500 group-hover:text-yellow-400 transition-colors" />
+            <Edit3 className="w-4 h-4 text-white/30 group-hover:text-yellow-400 transition-colors" />
           </div>
         )}
       </div>
 
       {/* Tags panel */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-3">
+      <div className="glass-panel rounded-3xl p-6">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="text-white font-semibold text-sm">🏷️ Hashtags ({selectedTags.length})</span>
+            <span className="text-white/90 font-display font-semibold">🏷️ Hashtags ({selectedTags.length})</span>
           </div>
           <button
             onClick={handleCopyTags}
@@ -259,28 +268,33 @@ export default function ExportPanel({
       </div>
 
       {/* Platform tabs */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-        <div className="flex">
+      <div className="glass-panel rounded-3xl overflow-hidden">
+        <div className="flex bg-white/[0.02] border-b border-white/[0.05]">
           <button
             onClick={() => setActiveTab('youtube')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-semibold transition-all relative ${
               activeTab === 'youtube'
-                ? 'bg-red-500/20 text-red-400 border-b-2 border-red-500'
-                : 'text-gray-400 hover:text-white border-b border-white/10'
+                ? 'text-red-400 bg-white/[0.02]'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.02]'
             }`}
           >
+            {activeTab === 'youtube' && (
+              <motion.div layoutId="activeTab" className="absolute bottom-0 inset-x-0 h-0.5 bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
+            )}
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3.01 3.01 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.5a3.01 3.01 0 00-2.1 2.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3.01 3.01 0 002.1 2.1C4.5 20.5 12 20.5 12 20.5s7.5 0 9.4-.6a3.01 3.01 0 002.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/></svg>
             YouTube Shorts ({youtubeClips.length})
-            <span className="text-xs opacity-70">≤3 min</span>
           </button>
           <button
             onClick={() => setActiveTab('instagram')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-4 text-sm font-semibold transition-all relative ${
               activeTab === 'instagram'
-                ? 'bg-purple-500/20 text-purple-400 border-b-2 border-purple-500'
-                : 'text-gray-400 hover:text-white border-b border-white/10'
+                ? 'text-fuchsia-400 bg-white/[0.02]'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.02]'
             }`}
           >
+            {activeTab === 'instagram' && (
+              <motion.div layoutId="activeTab" className="absolute bottom-0 inset-x-0 h-0.5 bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]" />
+            )}
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
             Instagram Reels ({instagramClips.length})
             <span className="text-xs opacity-70">≤1 min</span>
@@ -300,12 +314,12 @@ export default function ExportPanel({
                   key={clip.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/5 border border-white/10 rounded-xl p-4"
+                  className="glass-card rounded-2xl p-5"
                 >
-                  <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="flex-1">
-                      <h5 className="text-white font-semibold text-sm">{clip.title}</h5>
-                      <p className="text-gray-500 text-xs mt-0.5">{clip.duration}s · {formatTime(clip.startTime)} → {formatTime(clip.endTime)}</p>
+                      <h5 className="text-white/90 font-display font-semibold text-base">{clip.title}</h5>
+                      <p className="text-white/40 text-xs mt-1 font-medium">{clip.duration}s · {formatTime(clip.startTime)} → {formatTime(clip.endTime)}</p>
                     </div>
                     {isDone && (
                       <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full border border-green-500/30 flex items-center gap-1">
@@ -319,19 +333,18 @@ export default function ExportPanel({
                     {generateDescription(clip)}
                   </div>
 
-                  {/* Action buttons */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     <button
                       onClick={() => handleExport(clip.id, activeTab)}
                       disabled={isExporting}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
                         isExporting
-                          ? 'opacity-60 cursor-not-allowed'
+                          ? 'opacity-60 cursor-not-allowed bg-white/5'
                           : isDone
                           ? `bg-green-500/20 text-green-400 border border-green-500/30`
                           : activeTab === 'youtube'
-                          ? 'bg-red-500 hover:bg-red-400 text-white shadow-red-500/30 shadow-md'
-                          : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white shadow-purple-500/30 shadow-md'
+                          ? 'bg-red-500 hover:bg-red-400 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                          : 'bg-gradient-to-r from-fuchsia-600 to-violet-600 hover:from-fuchsia-500 hover:to-violet-500 text-white shadow-[0_0_20px_rgba(217,70,239,0.3)]'
                       }`}
                     >
                       {isExporting ? (
